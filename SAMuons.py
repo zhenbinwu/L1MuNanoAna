@@ -72,17 +72,17 @@ class SAMuons(Module):
         self.h.update(ratehists)
 
     def __fillRate(self):
-        self.h["pt"].fill_flattened(self.pt)
-        self.h["phi"].fill_flattened(self.phi)
-        self.h["eta"].fill_flattened(self.eta)
-        self.h["rate"].fill_flattened(self.pt)
-        self.h["Endcap_phi"].fill_flattened(self.phi[abs(self.eta)>1.2])
-        self.h["Endcap_phi2"].fill_flattened(self.hwPhi[abs(self.eta)>1.2] * GMT_LSB_cor)
+        self.h["pt"].fill(ak.flatten(self.pt))
+        self.h["phi"].fill(ak.flatten(self.phi))
+        self.h["eta"].fill(ak.flatten(self.eta))
+        self.h["rate"].fill(ak.flatten(self.pt))
+        self.h["Endcap_phi"].fill(ak.flatten(self.phi[abs(self.eta)>1.2]))
+        self.h["Endcap_phi2"].fill(ak.flatten(self.hwPhi[abs(self.eta)>1.2] * GMT_LSB_cor))
         for i in range(12):
-            self.h["rate_qual%d" % i].fill_flattened(self.pt[self.hwQual >= i])
+            self.h["rate_qual%d" % i].fill(ak.flatten(self.pt[self.hwQual >= i]))
             for region, etas in MuonEtamap.items():
                 sel = (self.hwQual >= i) & (abs(self.eta)>= etas[0]) & (abs(self.eta) < etas[1])
-                self.h["%s_rate_qual%d" % (region, i)].fill_flattened(self.pt[sel])
+                self.h["%s_rate_qual%d" % (region, i)].fill(ak.flatten(self.pt[sel]))
 
 
     def BookEff(self):

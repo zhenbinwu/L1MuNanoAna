@@ -62,10 +62,10 @@ class EMTFTracks(Module):
         self.h.update(objhist)
 
     def __fillRate(self):
-        self.h["pt"].fill_flattened(self.pt)
-        self.h["phi"].fill_flattened(self.phi)
-        self.h["eta"].fill_flattened(self.eta)
-        self.h["rate"].fill_flattened(self.pt)
+        self.h["pt"].fill(ak.flatten(self.pt))
+        self.h["phi"].fill(ak.flatten(self.phi))
+        self.h["eta"].fill(ak.flatten(self.eta))
+        self.h["rate"].fill(ak.flatten(self.pt))
 
 
     def BookEff(self):

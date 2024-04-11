@@ -69,15 +69,15 @@ class OMTFTracks(Module):
         self.h.update(objhist)
 
     def __fillRate(self):
-        self.h["pt"].fill_flattened(self.pt)
-        self.h["phi"].fill_flattened(self.phi)
-        self.h["eta"].fill_flattened(self.eta)
-        self.h["rate"].fill_flattened(self.pt)
-        self.h["hwpt"].fill_flattened(self.hwPt)
-        self.h["hwphi"].fill_flattened(self.hwPhi)
-        self.h["hweta"].fill_flattened(self.hwEta)
-        self.h["processor"].fill_flattened(self.processor)
-        self.h["muIdx"].fill_flattened(self.muIdx)
+        self.h["pt"].fill(ak.flatten(self.pt))
+        self.h["phi"].fill(ak.flatten(self.phi))
+        self.h["eta"].fill(ak.flatten(self.eta))
+        self.h["rate"].fill(ak.flatten(self.pt))
+        self.h["hwpt"].fill(ak.flatten(self.hwPt))
+        self.h["hwphi"].fill(ak.flatten(self.hwPhi))
+        self.h["hweta"].fill(ak.flatten(self.hwEta))
+        self.h["processor"].fill(ak.flatten(self.processor))
+        self.h["muIdx"].fill(ak.flatten(self.muIdx))
 
 
     def BookEff(self):
