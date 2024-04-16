@@ -55,6 +55,8 @@ class SAMuons(Module):
     def __bookobj(self, name=None):
         objhist = {
             "pt" :  Hist.new.Reg(100, 0, 100, name="pt").Double(),
+            "dxy" :  Hist.new.Reg(100, 0, 100, name="dxy").Double(),
+            "gendxy" :  Hist.new.Reg(100, 0, 100, name="gendxy").Double(),
             "phi" :  Hist.new.Reg(80, -4, 4, name="phi").Double(),
             "eta" :  Hist.new.Reg(90, -3, 3, name="eta").Double(),
             "rate" : Hist.new.Reg(100, 0, 100, name="rate").Double(),
@@ -73,16 +75,19 @@ class SAMuons(Module):
 
     def __fillRate(self):
         self.h["pt"].fill(ak.flatten(self.pt))
+        self.h["dxy"].fill(ak.flatten(self.d0))
+        self.h["gendxy"].fill(ak.flatten(self.genmu.dxy))
         self.h["phi"].fill(ak.flatten(self.phi))
         self.h["eta"].fill(ak.flatten(self.eta))
-        self.h["rate"].fill(ak.flatten(self.pt))
+        self.h["rate"].fill(ak.drop_none(ak.max(self.pt, axis=1)))
         self.h["Endcap_phi"].fill(ak.flatten(self.phi[abs(self.eta)>1.2]))
         self.h["Endcap_phi2"].fill(ak.flatten(self.hwPhi[abs(self.eta)>1.2] * GMT_LSB_cor))
         for i in range(12):
-            self.h["rate_qual%d" % i].fill(ak.flatten(self.pt[self.hwQual >= i]))
+            self.h["rate_qual%d" % i].fill(ak.drop_none(ak.max(self.pt[self.hwQual >= i], axis=1 )))
             for region, etas in MuonEtamap.items():
                 sel = (self.hwQual >= i) & (abs(self.eta)>= etas[0]) & (abs(self.eta) < etas[1])
-                self.h["%s_rate_qual%d" % (region, i)].fill(ak.flatten(self.pt[sel]))
+                self.h["%s_rate_qual%d" % (region, i)].fill(ak.drop_none(ak.max(self.pt[sel], axis=1)))
+        # self.h["detadphi_dxy4"].fill(ak.flatten(self.eta))
 
 
     def BookEff(self):
@@ -93,6 +98,27 @@ class SAMuons(Module):
 
     def CalEff(self):
         super().__CalDefaultEff__()
+        for cut in pTthresholds:
+            for qcut in [0, 1, 2, 3, 4, 8, 12, 15]:
+                self.__FillEff__("dxy_pt%d_qual%d" % (cut, qcut), "dxy", 25, 0, 100, 
+                                 label="gen#mu d_{xy} [cm]",
+                                 gencut = (abs(self.genmu.eta)<2.0), 
+                                 objcut = (self.pt > cut) & (self.hwQual >= qcut)
+                                )
+                for region, etas in MuonEtamap.items():
+                    self.__FillEff__("%s_pt%d_qual%d" % (region, cut, qcut), "pt", 25, 0, 100, label="%s gen#mu p_{T}" % region,
+                                     gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]),
+                                     objcut = (self.pt > cut) & (self.hwQual >= qcut) & (abs(self.eta)>= etas[0]) & (abs(self.eta) < etas[1])
+                                    )
+                    self.__FillEff__("%s_phi%d_qual%d" % (region, cut, qcut), "phi", 200, -4, 4, 
+                                     label="%s gen#mu #phi" % region, 
+                                     gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]),
+                                     objcut = (self.pt > cut) & (self.hwQual >= qcut)
+                                    )
+                    self.__FillEff__("%s_dxy_pt%d_qual%d" % (region, cut, qcut), "dxy", 10, 0, 100, label="gen#mu d_{xy} [cm]",
+                                     gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]) & (self.genmu.pt > 10+cut),
+                                     objcut = (self.pt > cut) & (self.hwQual >= qcut) & (abs(self.eta)>= etas[0]) & (abs(self.eta) < etas[1])
+                                    )
 
     def run(self, event):
         self.__GetEvent__(event)

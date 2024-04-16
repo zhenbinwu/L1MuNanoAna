@@ -75,6 +75,7 @@ MuonEtamap = {
     "Barrel" : [0, 0.83], 
     "Overlap" : [0.83, 1.24], 
     "Endcap" : [1.24, 2.4], 
+    "Endcap2" : [1.24, 2.0], 
 }
 
 
@@ -97,25 +98,34 @@ class Module():
 
     def __GetEvent__(self, event):
         if self.isDisplaced:
-            self.__GetDispGenMuon__(event)
+            self.genmu = self.__GetDispGenMuon__(event)
+            self.orggenmu = self.__GetGenMuon__(event)
         else:
-            self.__GetGenMuon__(event)
+            self.genmu = self.__GetGenMuon__(event)
+            self.orggenmu = self.genmu
+
         self.__ConstructP4__()
         self.gen_pass, self.obj_pass = self.__MatchGenMax__(self.matchdR)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Calculating Efficiency ~~~~~
     def __GetGenMuon__(self, event):
-        sel = (abs(event["GenPart_pdgId"]) == 13 ) & (event['GenPart_status'] == 1) & (abs(event["GenPart_eta"]) < 2.4 )
-        t =ak.zip({
+        parent = event["GenPart_pdgId"][event["GenPart_genPartIdxMother"]]
+        sel = (abs(event["GenPart_pdgId"]) == 13 ) & (event['GenPart_status'] == 1) & \
+                (abs(event["GenPart_eta"]) < 2.4 ) & (abs(event["GenPart_vz"]) <120 )
+        t = ak.zip({
             "pt" : event["GenPart_pt"][sel],
             'phi' : event["GenPart_phi"][sel],
             'eta' : event["GenPart_eta"][sel],
-            'm' : ak.zeros_like(event["GenPart_phi"][sel])
+            'm' : event["GenPart_mass"][sel],
+            'dxy' : event["GenPart_dXY"][sel],
+            'lxy' : event["GenPart_lXY"][sel],
         })
-        self.genmu = vector.Array(t)
+        return vector.Array(t)
 
     def __GetDispGenMuon__(self, event):
-        sel = (abs(event["GenPart_pdgId"]) == 13 ) & (event['GenPart_status'] == 1) & (abs(event["GenPart_eta"]) < 2.4 )
+        parent = event["GenPart_pdgId"][event["GenPart_genPartIdxMother"]]
+        sel = (abs(event["GenPart_pdgId"]) == 13 ) & (event['GenPart_status'] == 1) & \
+                (abs(event["GenPart_vz"]) < 120 )
 
         endcap_etaStar, endcap_phiStar = calc_etaphi_star_simple(
             event["GenPart_vx"],
@@ -136,13 +146,18 @@ class Module():
         prop_etaStar = ak.where(abs(barrel_etaStar) <= 1.2, barrel_etaStar, endcap_etaStar)
         prop_phiStar = ak.where(abs(barrel_etaStar) <= 1.2, barrel_phiStar, endcap_phiStar)
 
+        sel = sel & (abs(prop_etaStar) < 2.0)
+
         t =ak.zip({
             "pt" : event["GenPart_pt"][sel],
             'phi' : prop_phiStar[sel],
             'eta' : prop_etaStar[sel],
-            'm' : ak.zeros_like(event["GenPart_phi"][sel])
+            'm' : event["GenPart_mass"][sel],
+            'dxy' : event["GenPart_dXY"][sel],
+            'lxy' : event["GenPart_lXY"][sel],
         })
-        self.genmu = vector.Array(t)
+
+        return vector.Array(t)
 
     def __ConstructP4__(self):
         if not hasattr(self, 'pt'):
@@ -223,14 +238,14 @@ class Module():
 
         self.h["%s__den_" % name ].fill(ak.flatten(getattr(self.genmu[denominator_genidx], att)))
         self.h["%s__num_" % name ].fill(ak.flatten(getattr(self.genmu[numerator_unigenidx], att)))
-        return  denominator_genidx, numerator_genidx,numerator_objidx
+        return  denominator_genidx, numerator_genidx, numerator_objidx
 
     def __CalDefaultEff__(self):
         for cut in pTthresholds:
             self.__FillEff__("pt_%d" % cut, "pt", 50, 0, 100, label="gen#mu p_{T}",
                              objcut = self.pt > cut
                             )
-            self.__FillEff__("eta_pt_%d" % cut, "eta", 200, -4, 4, label="gen#mu #eta",
+            self.__FillEff__("eta_pt_%d" % cut, "eta", 180, -3, 3, label="gen#mu #eta",
                              gencut = self.genmu.pt>(10+cut), 
                              objcut = self.pt > cut
                             )
@@ -286,6 +301,7 @@ class Module():
         for k in orgkeys:
             if "rate" in k:
                 self.h["%s_scaled" % k] = self.ConvertRate(self.h[k], nTotal)
+                self.h.pop(k)
         for k in self.h.keys():
             outfile["%s/%s" % (self.folder, k)] = self.h[k]
 
@@ -293,19 +309,24 @@ class Module():
         effname = name+"_eff"
         num = name +"__num_"
         den = name + "__den_"
+        # values = np.true_divide(self.h[num].values() , self.h[den].values(),
+                                # out=np.zeros_like(self.h[num].values()), 
+                                # where= self.h[den].values()!=0)
         values = self.h[num].values() / self.h[den].values()
         variances = np.zeros_like(values)
         # variances = ratio_uncertainty( num = self.h[num].values(), 
                                       # denom = self.h[den].values(),
                                       # uncertainty_type="efficiency")
         self.h[effname][...] = np.stack([values, variances], axis=-1)
-        # print(self.h[effname].view())
+        # self.h.pop(num)
+        # self.h.pop(den)
 
     def ConvertRate(self, hist, nZB=0):
+        rethist = hist.copy()
         if nZB == 0:
             return hist
         content = hist.values()
         newcontent = np.flip(np.cumsum(np.flip(content))) * LHCnBunches * LHCFreq / nZB
-        hist[...] = newcontent
-        return hist
+        rethist[...] = newcontent
+        return rethist
 

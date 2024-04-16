@@ -14,6 +14,7 @@ import argparse
 import numpy as np
 import awkward as ak
 import pprint
+import glob
 import subprocess
 from hist import Hist
 # from EMTFHits import EMTFHits
@@ -33,7 +34,7 @@ samplemap = {
     # "DsToTauTo3Mu":  "DsToTauTo3Mu_TuneCP5_14TeV-pythia8",
     "DYToLL"      :  "DYToLL_M-50_TuneCP5_14TeV-pythia8",
     "MinBias"     :  "MinBias_TuneCP5_14TeV-pythia8",
-    "H24Mu"       : 'HTo2LongLivedTo4mu_MH-125_MFF-12_CTau-900mm_TuneCP5_14TeV-pythia8',
+    "H24Mu"       :  'HTo2LongLivedTo4mu_MH-125_MFF-12_CTau-900mm_TuneCP5_14TeV-pythia8',
     # "Muon200"     :  "SingleMuon_Pt-0To200_Eta-1p4To3p1-gun",
     # "Muon500"     :  "SingleMuon_Pt-200To500_Eta-1p4To3p1-gun",
     # "TauTo3Mu"    :  "TauTo3Mu_TuneCP5_14TeV-pythia8",
@@ -46,7 +47,7 @@ def eosls(sample):
     if sample not in samplemap.keys():
         return None
     if "local" in hostname:
-        outputLocation = "/Users/benwu/Work/Data/Fall22_GMT_v2/" + sample
+        outputLocation = "/Users/benwu/Work/L1MuNanoAna/V9Data/"
     else:
         outputLocation = eosfolder + samplemap[sample]
     if "eos" in outputLocation:
@@ -56,7 +57,8 @@ def eosls(sample):
         dummyFiles = str(dummyFiles_, 'UTF-8').split("\n")
         dummyFiles = [ f for f in dummyFiles if f.endswith(".root") ]
     else:
-        dummyFiles = [ outputLocation +"/"+i for i in os.listdir(outputLocation)]
+        # dummyFiles = [ outputLocation +"/"+i for i in os.listdir(outputLocation)]
+        dummyFiles = glob.glob(outputLocation +"/%s*.root" % sample)
     return dummyFiles
 
 if __name__ == "__main__":
@@ -67,8 +69,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.sample == "test":
-        # filelist = ["./H24mu_GMTV7.root"]
-        filelist = ["./MinBias.root"]
+        # filelist = ["./H24mu_v8.root"]
+        filelist = ["./V9Data/H24Mu.root"]
+        # filelist = ["./DYLL_v8.root"]
         # filelist = ["./DYLL_GMTV7.root"]
         # filelist = ["./DYLL_GMTV5.root"]
         # filelist = ["./l1nano_v5.root"]
@@ -87,31 +90,30 @@ if __name__ == "__main__":
     )
 
     ### Store the output file
-    outfile = uproot.recreate("%s_disp.root" % args.sample )
+    outfile = uproot.recreate("%s_hists.root" % args.sample )
 
-    # mod_hit = EMTFHits()
-    # mod_emtf = EMTFTrack()
-    # mod_hbstub = HybridStub()
-    # mod_gmtstub = GMTStubs()
-    mod_tkmuons = TrackerMuons()
-    mod_samuons = SAMuons("SA", "samu_")
-    mod_sadisp = SAMuons("SADisp_dR3", "dismu_", isDisplaced=True, matchdR=0.3)
-    mod_sadisp = SAMuons("SADisp_dR6", "dismu_", isDisplaced=True, matchdR=0.6)
-    mod_fwds = SAMuons("Fwd", "fwdmu_")
-    mod_emtf = EMTFTracks()
-    mod_omtf = OMTFTracks()
-    # mod_l1trks = L1Tracks()
+    # mod_tkmuons = TrackerMuons()
+    mod_samuons = SAMuons("SA", "samu_", isDisplaced=True, matchdR=0.3)
+    mod_sadisp3 = SAMuons("SADisp_dR3", "dismu_", isDisplaced=True, matchdR=0.3)
+    # mod_sadisp6 = SAMuons("SADisp_dR6", "dismu_", isDisplaced=True, matchdR=0.6)
+    # mod_fwds = SAMuons("Fwd", "fwdmu_" , isDisplaced=True, matchdR=0.3)
+    # mod_fwdisp3 = SAMuons("FwdDisp_dR3", "fwddismu_", isDisplaced=True, matchdR=0.3)
+    # mod_fwdisp6 = SAMuons("FwdDisp_dR6", "fwddismu_", isDisplaced=True, matchdR=0.6)
+    # mod_emtf = EMTFTracks()
+    # mod_omtf = OMTFTracks()
     modules = [
         # mod_hit,
         # mod_emtf,
         # mod_hbstub,
         mod_samuons,
-        mod_sadisp,
-        mod_fwds,
-        mod_emtf, 
-        mod_omtf,
-        mod_tkmuons,
-        
+        mod_sadisp3,
+        # mod_sadisp6,
+        # mod_fwds,
+        # mod_fwdisp3,
+        # mod_fwdisp6,
+        # mod_emtf, 
+        # mod_omtf,
+        # mod_tkmuons,
         # mod_l1trks,
     ]
 
