@@ -99,12 +99,26 @@ class SAMuons(Module):
     def CalEff(self):
         super().__CalDefaultEff__()
         for cut in pTthresholds:
-            for qcut in [0, 1, 2, 3, 4, 8, 12, 15]:
+            self.__FillEff__("KMTF_dxy_pt%d" % (cut), "dxy", 20, 0, 100, label="gen KMTF #mu d_{xy} [cm]",
+                             gencut = getKMTFAcceptance(self.genmu.lxy,
+                                                        self.genmu.vz,
+                                                        self.genmu.orgeta) &  (self.genmu.pt > 10+cut),
+                             objcut = (self.pt > cut)
+                            )
+            self.__FillEff__("KMTF_lxy_pt%d" % (cut), "lxy", 20, 0, 100, label="gen KMTF #mu l_{xy} [cm]",
+                             gencut = getKMTFAcceptance(self.genmu.lxy,
+                                                        self.genmu.vz,
+                                                        self.genmu.orgeta) &  (self.genmu.pt > 10+cut),
+                             objcut = (self.pt > cut)
+                            )
+
+            for qcut in [0, 1, 2, 3, 4, 8, 12, 14, 15]:
                 self.__FillEff__("dxy_pt%d_qual%d" % (cut, qcut), "dxy", 25, 0, 100, 
                                  label="gen#mu d_{xy} [cm]",
                                  gencut = (abs(self.genmu.eta)<2.0), 
                                  objcut = (self.pt > cut) & (self.hwQual >= qcut)
                                 )
+
                 for region, etas in MuonEtamap.items():
                     self.__FillEff__("%s_pt%d_qual%d" % (region, cut, qcut), "pt", 25, 0, 100, label="%s gen#mu p_{T}" % region,
                                      gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]),
@@ -115,7 +129,11 @@ class SAMuons(Module):
                                      gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]),
                                      objcut = (self.pt > cut) & (self.hwQual >= qcut)
                                     )
-                    self.__FillEff__("%s_dxy_pt%d_qual%d" % (region, cut, qcut), "dxy", 10, 0, 100, label="gen#mu d_{xy} [cm]",
+                    self.__FillEff__("%s_dxy_pt%d_qual%d" % (region, cut, qcut), "dxy", 20, 0, 100, label="gen#mu d_{xy} [cm]",
+                                     gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]) & (self.genmu.pt > 10+cut),
+                                     objcut = (self.pt > cut) & (self.hwQual >= qcut) & (abs(self.eta)>= etas[0]) & (abs(self.eta) < etas[1])
+                                    )
+                    self.__FillEff__("%s_lxy_pt%d_qual%d" % (region, cut, qcut), "lxy", 20, 0, 100, label="gen#mu l_{xy} [cm]",
                                      gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]) & (self.genmu.pt > 10+cut),
                                      objcut = (self.pt > cut) & (self.hwQual >= qcut) & (abs(self.eta)>= etas[0]) & (abs(self.eta) < etas[1])
                                     )

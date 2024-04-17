@@ -105,6 +105,23 @@ def akgetSt2Phi(vx, vy, genphi, r=512):
 
     return retphi
 
+def getKMTFEta1(lxy, vz):
+    theta1 = np.arctan((700.-lxy)/(650.-vz))
+    theta1 = ak.where(theta1 < 0, math.pi+theta1, theta1)
+    eta1 = -np.log(np.tan(theta1/2.0))
+    return eta1
+
+def getKMTFEta2(lxy, vz):
+    theta2 = math.pi-np.arctan((700.-lxy)/(650.+vz))
+    theta2 = ak.where( theta2 > math.pi, theta2-math.pi, theta2)
+    eta2 = -np.log(np.tan(theta2/2.0))
+    return eta2                                     
+
+def getKMTFAcceptance(lxy, vz, eta):
+    eta1 = getKMTFEta1(lxy, vz)
+    eta2 = getKMTFEta2(lxy, vz)
+    return (eta < eta1 ) & (eta > eta2)
+
 ## EMTF propogation
 def calc_etaphi_star_simple(vx, vy, vz, eta, phi, me2_z=808.0):
     me2_dz =ak.where(eta>0, abs(me2_z - vz) / abs(np.sinh(eta)), abs(-me2_z - vz) / abs(np.sinh(eta)))

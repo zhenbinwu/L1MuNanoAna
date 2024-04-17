@@ -109,7 +109,6 @@ class Module():
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Calculating Efficiency ~~~~~
     def __GetGenMuon__(self, event):
-        parent = event["GenPart_pdgId"][event["GenPart_genPartIdxMother"]]
         sel = (abs(event["GenPart_pdgId"]) == 13 ) & (event['GenPart_status'] == 1) & \
                 (abs(event["GenPart_eta"]) < 2.4 ) & (abs(event["GenPart_vz"]) <120 )
         t = ak.zip({
@@ -117,15 +116,15 @@ class Module():
             'phi' : event["GenPart_phi"][sel],
             'eta' : event["GenPart_eta"][sel],
             'm' : event["GenPart_mass"][sel],
+            'vz' : event["GenPart_vz"][sel],
             'dxy' : event["GenPart_dXY"][sel],
             'lxy' : event["GenPart_lXY"][sel],
         })
         return vector.Array(t)
 
     def __GetDispGenMuon__(self, event):
-        parent = event["GenPart_pdgId"][event["GenPart_genPartIdxMother"]]
         sel = (abs(event["GenPart_pdgId"]) == 13 ) & (event['GenPart_status'] == 1) & \
-                (abs(event["GenPart_vz"]) < 120 )
+                (abs(event["GenPart_eta"]) < 2.4 ) & (abs(event["GenPart_vz"]) <120 )
 
         endcap_etaStar, endcap_phiStar = calc_etaphi_star_simple(
             event["GenPart_vx"],
@@ -153,8 +152,11 @@ class Module():
             'phi' : prop_phiStar[sel],
             'eta' : prop_etaStar[sel],
             'm' : event["GenPart_mass"][sel],
+            'vz' : event["GenPart_vz"][sel],
             'dxy' : event["GenPart_dXY"][sel],
             'lxy' : event["GenPart_lXY"][sel],
+            'orgphi' : event["GenPart_phi"][sel],
+            'orgeta' : event["GenPart_eta"][sel],
         })
 
         return vector.Array(t)
@@ -309,14 +311,13 @@ class Module():
         effname = name+"_eff"
         num = name +"__num_"
         den = name + "__den_"
-        # values = np.true_divide(self.h[num].values() , self.h[den].values(),
-                                # out=np.zeros_like(self.h[num].values()), 
-                                # where= self.h[den].values()!=0)
-        values = self.h[num].values() / self.h[den].values()
+        values = np.true_divide(self.h[num].values() , self.h[den].values(),
+                                out=np.zeros_like(self.h[num].values()), 
+                                where= self.h[den].values()!=0)
         variances = np.zeros_like(values)
         # variances = ratio_uncertainty( num = self.h[num].values(), 
                                       # denom = self.h[den].values(),
-                                      # uncertainty_type="efficiency")
+                                      # uncertainty_type="efficiency")[0]
         self.h[effname][...] = np.stack([values, variances], axis=-1)
         # self.h.pop(num)
         # self.h.pop(den)
