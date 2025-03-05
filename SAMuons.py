@@ -62,7 +62,6 @@ class SAMuons(Module):
             "rate" : Hist.new.Reg(100, 0, 100, name="rate").Double(),
             "qual" : Hist.new.Reg(16, 0, 16, name="qual").Double(),
             "Endcap_phi" :  Hist.new.Reg(80, -4, 4, name="phi").Double(),
-            "Endcap_phi2" :  Hist.new.Reg(80, -4, 4, name="phi").Double(),
         }
         self.h.update(objhist)
 
@@ -73,15 +72,18 @@ class SAMuons(Module):
                 ratehists["%s_rate_qual%d" % (region, i)] = Hist.new.Reg(100, 0, 100, name="%s qual>% d"% (region , i)).Double()
         self.h.update(ratehists)
 
+        for region, etas in MuonEtamap.items():
+            self.h["%s_Calibration" % region] = Hist.new.Reg(100, 0, 100, name="genpt")\
+                    .Reg(100, -1, 1, name="response", label="(pt-gen)/gen").Double()
+
     def __fillRate(self):
         self.h["pt"].fill(ak.flatten(self.pt))
-        self.h["dxy"].fill(ak.flatten(self.d0))
+        # self.h["dxy"].fill(ak.flatten(self.d0))
         self.h["gendxy"].fill(ak.flatten(self.genmu.dxy))
         self.h["phi"].fill(ak.flatten(self.phi))
         self.h["eta"].fill(ak.flatten(self.eta))
         self.h["rate"].fill(ak.drop_none(ak.max(self.pt, axis=1)))
         self.h["Endcap_phi"].fill(ak.flatten(self.phi[abs(self.eta)>1.2]))
-        self.h["Endcap_phi2"].fill(ak.flatten(self.hwPhi[abs(self.eta)>1.2] * GMT_LSB_cor))
         for i in range(12):
             self.h["rate_qual%d" % i].fill(ak.drop_none(ak.max(self.pt[self.hwQual >= i], axis=1 )))
             for region, etas in MuonEtamap.items():
@@ -98,6 +100,7 @@ class SAMuons(Module):
 
     def CalEff(self):
         super().__CalDefaultEff__()
+        dxybins = np.append(np.linspace(0, 60, 13), [70, 80, 100, 125, 150, 175, 200])
         for cut in pTthresholds:
             self.__FillEff__("KMTF_dxy_pt%d" % (cut), "dxy", 20, 0, 100, label="gen KMTF #mu d_{xy} [cm]",
                              gencut = getKMTFAcceptance(self.genmu.lxy,
@@ -105,7 +108,7 @@ class SAMuons(Module):
                                                         self.genmu.orgeta) &  (self.genmu.pt > 10+cut),
                              objcut = (self.pt > cut)
                             )
-            self.__FillEff__("KMTF_lxy_pt%d" % (cut), "lxy", 20, 0, 100, label="gen KMTF #mu l_{xy} [cm]",
+            self.__FillEff__("KMTF_lxy_pt%d" % (cut), "lxy", 50, 0, 200, label="gen KMTF #mu l_{xy} [cm]",
                              gencut = getKMTFAcceptance(self.genmu.lxy,
                                                         self.genmu.vz,
                                                         self.genmu.orgeta) &  (self.genmu.pt > 10+cut),
@@ -129,19 +132,37 @@ class SAMuons(Module):
                                      gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]),
                                      objcut = (self.pt > cut) & (self.hwQual >= qcut)
                                     )
-                    self.__FillEff__("%s_dxy_pt%d_qual%d" % (region, cut, qcut), "dxy", 20, 0, 100, label="gen#mu d_{xy} [cm]",
+                    self.__FillEffVar__("%s_dxy_pt%d_qual%d" % (region, cut, qcut), "dxy", dxybins, label="gen#mu d_{xy} [cm]",
+                                     gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]) & (self.genmu.pt > 10+cut),
+                                     # objcut = (self.pt > cut) & (self.hwQual >= qcut),
+                                     objcut = (self.pt > cut) & (self.hwQual >= qcut) & (abs(self.eta)>= etas[0]) & (abs(self.eta) < etas[1])
+                                    )
+                    self.__FillEff__("%s_lxy_pt%d_qual%d" % (region, cut, qcut), "lxy", 50, 0, 200, label="gen#mu l_{xy} [cm]",
                                      gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]) & (self.genmu.pt > 10+cut),
                                      objcut = (self.pt > cut) & (self.hwQual >= qcut) & (abs(self.eta)>= etas[0]) & (abs(self.eta) < etas[1])
                                     )
-                    self.__FillEff__("%s_lxy_pt%d_qual%d" % (region, cut, qcut), "lxy", 20, 0, 100, label="gen#mu l_{xy} [cm]",
-                                     gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]) & (self.genmu.pt > 10+cut),
-                                     objcut = (self.pt > cut) & (self.hwQual >= qcut) & (abs(self.eta)>= etas[0]) & (abs(self.eta) < etas[1])
-                                    )
+
+    def Calibration(self):
+        for region, etas in MuonEtamap.items():
+            if self.folder  == "SA":
+                qcut = etas[2]
+            else:
+                qcut = etas[3]
+            _, genidx, objidx = self.__FillEff__("%s_pt0_qual%d" % (region, qcut), "pt", 25, 0, 100, label="%s gen#mu p_{T}" % region,
+                             gencut = (abs(self.genmu.eta)>= etas[0]) & (abs(self.genmu.eta) < etas[1]),
+                             objcut = (self.hwQual >= qcut) & (abs(self.eta)>= etas[0]) & (abs(self.eta) < etas[1])
+                            )
+            genpt = self.genmu[genidx].pt 
+            objpt = self.p4[objidx].pt 
+            response = (objpt - genpt)/genpt
+            self.h["%s_Calibration" % region].fill(ak.flatten(genpt), ak.flatten(response))
+
 
     def run(self, event):
         self.__GetEvent__(event)
         self.__fillRate()
         self.CalEff()
+        self.Calibration()
 
     def endrun(self, outfile, nZB=0):
         super().endrun(outfile, nZB)

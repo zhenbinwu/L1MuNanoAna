@@ -14,6 +14,14 @@ import awkward as ak
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Function for Awkward ~~~~~
 
+def akwhere(condition, iftrue, iffalse):
+    flatCond = ak.flatten(condition)
+    flattrue = ak.flatten(iftrue)
+    flatflase = ak.flatten(iffalse)
+    flatout = ak.where(flatCond, flattrue, flatflase)
+    out=ak.unflatten(flatout, ak.num(condition, axis=1))
+    return out
+
 def GetUnique(array):
     length = ak.run_lengths(array)
     flat = ak.flatten(array)
