@@ -13,6 +13,7 @@ from collections import defaultdict
 from math import e
 from os import killpg, sendfile
 from re import findall
+from collections import Counter
 
 import awkward as ak
 import numpy as np
@@ -47,14 +48,35 @@ class TauModules(Module):
         objhist = {
             "hwmass": Hist.new.Reg(300, 0, 300, name="hwmass").Double(),
             "mass": Hist.new.Reg(100, 0, 10, name="mass").Double(),
+            "tripletCnt": Hist.new.Reg(4, 0, 4, name="cnts").Double(),
             "mu1": Hist.new.Reg(10, 0, 10, name="mu1").Double(),
             "mu2": Hist.new.Reg(10, 0, 10, name="mu2").Double(),
-            "mu3": Hist.new.Reg(10, 0, 10, name="mu3").Double(),
-            "tktau_rate": Hist.new.Reg(100, 0, 100, name="rate").Double(),
+            "mu3": Hist.new.Reg(10, 0, 10, name="mu3", label="mu 3 index").Double(),
+            "mu1_qual": Hist.new.Reg(16, 0, 16, name="mu1_qual").Double(),
+            "mu2_qual": Hist.new.Reg(16, 0, 16, name="mu2_qual").Double(),
+            "mu3_qual": Hist.new.Reg(16, 0, 16, name="mu3_qual").Double(),
+            "selmu1_qual": Hist.new.Reg(16, 0, 16, name="selmu1_qual").Double(),
+            "selmu2_qual": Hist.new.Reg(16, 0, 16, name="selmu2_qual").Double(),
+            "selmu3_qual": Hist.new.Reg(16, 0, 16, name="selmu3_qual").Double(),
+            "tktau_rate": Hist.new.Reg(
+                100, 0, 10, name="rate", label="tktau mass (GeV)"
+            ).Double(),
+            "tktau_rate_0": Hist.new.Reg(
+                100, 0, 10, name="rate", label="tktau mass (GeV) [VLoose]"
+            ).Double(),
+            "tktau_rate_1": Hist.new.Reg(
+                100, 0, 10, name="rate", label="tktau mass (GeV) [Loose]"
+            ).Double(),
+            "tktau_rate_2": Hist.new.Reg(
+                100, 0, 10, name="rate", label="tktau mass (GeV) [Medium]"
+            ).Double(),
+            "tktau_rate_3": Hist.new.Reg(
+                100, 0, 10, name="rate", label="tktau mass (GeV) [Tight]"
+            ).Double(),
         }
         gentauhists = {
             "gentau_nMuonAccept": Hist.new.Reg(
-                4, 0, 4, name="gentau_nMuonAccept"
+                3, 1, 4, name="gentau_nMuonAccept"
             ).Double(),
             "gentau_accepted_pt": Hist.new.Reg(
                 200, 0, 20, name="accepted gentau pt"
@@ -89,16 +111,58 @@ class TauModules(Module):
 
     def __fillobj(self):
         self.h["hwmass"].fill(ak.flatten(self.hwMass))
+        self.h["tripletCnt"].fill_flattened(ak.run_lengths(ak.sort(self.hwMass)))
         self.h["mass"].fill(ak.flatten(self.mass))
         self.h["mu1"].fill(ak.flatten(self.mu1))
         self.h["mu2"].fill(ak.flatten(self.mu2))
         self.h["mu3"].fill(ak.flatten(self.mu3))
-        self.h["tktau_rate"].fill_flattened(ak.drop_none(ak.min(self.mass, axis=1)))
+        self.h["mu1_qual"].fill(ak.flatten(self.tkmu[self.mu1].qual))
+        self.h["mu2_qual"].fill(ak.flatten(self.tkmu[self.mu2].qual))
+        self.h["mu3_qual"].fill(ak.flatten(self.tkmu[self.mu3].qual))
+        for ie, m in enumerate(self.mass):
+            hastktau = False
+            tktaucnt = Counter(m)
+            choseone = None
+            for i, j in tktaucnt.items():
+                if j == 3:
+                    choseone = i
+                    break
+            if choseone is not None:
+                self.h["tktau_rate"].fill(choseone)
+                tktaupos = m.tolist().index(choseone)
+                self.filltaurate_qual(choseone, tktaupos, ie, 0, 0, 0)
+                self.filltaurate_qual(choseone, tktaupos, ie, 1, 1, 1)
+                self.filltaurate_qual(choseone, tktaupos, ie, 2, 2, 2)
+                self.filltaurate_qual(choseone, tktaupos, ie, 3, 3, 3)
+
+    def filltaurate_qual(self, choseone, tktaupos, ie, mu1_qual, mu2_qual, mu3_qual):
+        hname = "tktau_rate_%d%d%d" % (mu1_qual, mu2_qual, mu3_qual)
+        passqual = (
+            (self.tkmu[ie][self.mu1[ie][tktaupos]].qual & (1 << mu1_qual) > 0)
+            and (self.tkmu[ie][self.mu2[ie][tktaupos]].qual & (1 << mu2_qual) > 0)
+            and (self.tkmu[ie][self.mu3[ie][tktaupos]].qual & (1 << mu3_qual) > 0)
+        )
+        if hname not in self.h.keys():
+            self.h[hname] = Hist.new.Reg(
+                100,
+                0,
+                10,
+                name="rate_%d%d%d" % (mu1_qual, mu2_qual, mu3_qual),
+                label="tktau mass (GeV)",
+            ).Double()
+
+        if passqual:
+            self.h[hname].fill(choseone)
+
+        # self.h["tktau_rate"].fill_flattened(ak.drop_none(ak.min(self.mass, axis=1)))
 
     def run(self, event):
         self.__GetEvent__(event)
         self.__fillobj()
-        self.caleffall()
+        self.caleffall(0, 0, 0)
+        self.caleffall(1, 1, 1)
+        self.caleffall(2, 2, 2)
+        self.caleffall(3, 3, 3)
 
     def endrun(self, outfile, nZB=0):
         super().endrun(outfile, nZB)
@@ -161,21 +225,147 @@ class TauModules(Module):
         # gentau2 = self.genmu[self.tkmu[self.tktau.mu2]._genmuIdx]
         # gentau3 = self.,genmu[self.tkmu[self.tktau.mu3]._genmuIdx]
 
-    def caleffall(self):
+    def caleffall(self, mu1_qual, mu2_qual, mu3_qual):
+        if self.minbias:
+            return False
+
         # Get the index of gen tau with 3 muon matched
-        gentauaccpetd = self.GenTauStudy()
-        # boolen of Event has accepted gen tau, event based
-        gentauevt = ak.count(gentauaccpetd, axis=1) > 0
-        # boolen of Event has tk tau, event based
-        tktauevt = ak.count(self.hwMass, axis=1) > 0
-        numaccepted = tktauevt & gentauevt
-        gentaumatched = ak.mask(gentauaccpetd, numaccepted)
+        # gentauaccpetd = self.GenTauStudy()
+        accepted_gentau_indices = self.GenTauStudy()
+
+        for ie, gentau in enumerate(accepted_gentau_indices):
+            if len(gentau) == 0:
+                continue
+            # print(
+            #     ie,
+            #     gentau,
+            #     self.hwMass[ie],
+            #     self.tkmu[ie][self.mu1[ie]].qual,
+            #     self.tkmu[ie][self.mu2[ie]].qual,
+            #     self.tkmu[ie][self.mu3[ie]].qual,
+            # )
+            hastktau = False
+            tktaucnt = Counter(self.hwMass[ie])
+            # if len(tktaucnt) > 1:
+            #     print(
+            #         self.hwMass[ie],
+            #         self.tkmu[ie][self.mu1[ie]].phi,
+            #         self.tkmu[ie][self.mu2[ie]].phi,
+            #         self.tkmu[ie][self.mu3[ie]].phi,
+            #         self.tkmu[ie][self.mu1[ie]].hwphi,
+            #         self.tkmu[ie][self.mu2[ie]].hwphi,
+            #         self.tkmu[ie][self.mu3[ie]].hwphi,
+            #         self.tkmu[ie][self.mu1[ie]].eta,
+            #         self.tkmu[ie][self.mu2[ie]].eta,
+            #         self.tkmu[ie][self.mu3[ie]].eta,
+            #     )
+            choseone = None
+            for i, j in tktaucnt.items():
+                if j == 3:
+                    choseone = i
+                    break
+            if choseone is not None:
+                # print(choseone, type(self.hwMass[ie]))
+                tktaupos = self.hwMass[ie].tolist().index(choseone)
+                passqual = (
+                    (self.tkmu[ie][self.mu1[ie][tktaupos]].qual & (1 << mu1_qual) > 0)
+                    and (
+                        self.tkmu[ie][self.mu2[ie][tktaupos]].qual & (1 << mu2_qual) > 0
+                    )
+                    and (
+                        self.tkmu[ie][self.mu3[ie][tktaupos]].qual & (1 << mu3_qual) > 0
+                    )
+                )
+                # self.h["selmu1_qual"].fill(self.tkmu[ie][self.mu1[ie][tktaupos]].qual)
+                # self.h["selmu2_qual"].fill(self.tkmu[ie][self.mu2[ie][tktaupos]].qual)
+                # self.h["selmu3_qual"].fill(self.tkmu[ie][self.mu3[ie][tktaupos]].qual)
+                hastktau = passqual
+                # print(choseone, tktaupos, passqual)
+
+            self.__FillEffPerEvent__(
+                "gentau_eff_pt_"
+                + str(mu1_qual)
+                + "_"
+                + str(mu2_qual)
+                + "_"
+                + str(mu3_qual),  # + mu2_qual + "_" + mu3_qual,
+                self.gentau[ie][gentau[0]].pt,
+                hastktau,
+                20,
+                0,
+                20,
+                "pt_eff",
+            )
+            self.__FillEffPerEvent__(
+                "gentau_eff_mass_"
+                + str(mu1_qual)
+                + "_"
+                + str(mu2_qual)
+                + "_"
+                + str(mu3_qual),  # + mu2_qual + "_" + mu3_qual,
+                self.gentau[ie][gentau[0]].m,
+                hastktau,
+                100,
+                0,
+                4,
+                "mass_eff",
+            )
+
+        return False
+        #
+        # # boolean of Event has accepted gen tau, event based
+        # gentauevt = ak.count(gentauaccpetd, axis=1) > 0
+        # # boolean of Event has tk tau, event based
+        # # tktauevt = (
+        # #     (ak.count(self.hwMass, axis=1) > 0)
+        # #     & (self.tkmu[self.mu1].qual == 15)
+        # #     & (self.tkmu[self.mu2].qual == 15)
+        # #     & (self.tkmu[self.mu3].qual == 15)
+        # # )
+        # muonqual = 15
+        # tkmuqual = (
+        #     (self.tkmu[self.mu1].qual == muonqual)
+        #     & (self.tkmu[self.mu2].qual == muonqual)
+        #     & (self.tkmu[self.mu3].qual == muonqual)
+        # )
+        # numaccepted = tktauevt & gentauevt
+        # padnumaccepted = ak.fill_none(ak.pad_none(numaccepted, 1, axis=1), False)
+        # gentaumatched = ak.mask(gentauaccpetd, padnumaccepted)
+        # # gentaumatched = gentauaccpetd[padnumaccepted]
+
+        # Event-level boolean: does the event have at least one accepted gen tau?
+        has_accepted_gentau = ak.count(accepted_gentau_indices, axis=1) > 0
+
+        # Define muon quality requirement
+        muon_quality_threshold = 15
+
+        # Event-level boolean: do the reconstructed muons in the tk tau candidate
+        # meet the quality criteria?
+        tkmu_qual_ok = (
+            (self.tkmu[self.mu1].qual == muon_quality_threshold)
+            & (self.tkmu[self.mu2].qual == muon_quality_threshold)
+            & (self.tkmu[self.mu3].qual == muon_quality_threshold)
+        )
+
+        # Event-level boolean: does the event have both an accepted gen tau and
+        # a good-quality tk tau candidate?
+        # This is the key selection for efficiency calculation
+        num_accepted = has_accepted_gentau & tkmu_qual_ok
+
+        # Apply the event-level selection to the accepted gen taus
+        # Only consider accepted gen taus in events that pass the selection
+        # The pad_none and fill_none are likely unnecessary and potentially harmful.
+        # Review the logic here carefully.  It seems like it's trying to handle
+        # cases where there are no accepted gen taus, but it might be doing it wrong.
+        # padnumaccepted = ak.fill_none(ak.pad_none(num_accepted, 1, axis=1), False)
+        # gentaumatched = ak.mask(accepted_gentau_indices, padnumaccepted)
+        gentaumatched = accepted_gentau_indices[num_accepted]
 
         self.__FillEffPerObj__(
             "gentau_eff_pt",
             self.gentau,
             "pt",
-            100,
+            20,
             0,
             20,
             "pt_eff",
@@ -231,7 +421,9 @@ class TauModules(Module):
         )
         ## Only accept the gen tau with 3 muon matched
         lt_accpeted = lt[ak.run_lengths(lt[muappt]) == 3]
-        self.h["gentau_accepted_pt"].fill_flattened(self.gentau[lt_accpeted].pt)
+        self.h["gentau_accepted_pt"].fill_flattened(
+            ak.max(self.gentau[lt_accpeted].pt, axis=1)
+        )
         self.h["gentau_accepted_eta"].fill_flattened(self.gentau[lt_accpeted].eta)
         self.h["gentau_accepted_phi"].fill_flattened(self.gentau[lt_accpeted].phi)
         return lt_accpeted
@@ -241,7 +433,6 @@ class TauModules(Module):
         for i, _ in enumerate(self.gentau):
             gentaugenmu = self.__ConnectGenTauGenMu(i)
             genmutkmu = self.__ConnectGenMuTkMu(i)
-            print(i, "gentau", gentaugenmu, "genmu", genmutkmu)
             if i > 10:
                 break
 

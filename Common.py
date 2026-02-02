@@ -99,6 +99,10 @@ class Module:
         self.effnames = []
         self.isDisplaced = isDisplaced
         self.matchdR = matchdR
+        self.minbias = False
+
+    def isMinBias(self, isit):
+        self.minbias = isit
 
     def __GetEvent__(self, event):
         if self.isDisplaced:
@@ -106,8 +110,9 @@ class Module:
         else:
             self.genmu = self.__GetGenMuon__(event)
 
-        self.__ConstructP4__()
-        self.gen_pass, self.obj_pass = self.__MatchGenMax__(self.matchdR)
+        isobj = self.__ConstructP4__()
+        if isobj:
+            self.gen_pass, self.obj_pass = self.__MatchGenMax__(self.matchdR)
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Calculating Efficiency ~~~~~
     def __GetTkMuon__(self, event):
@@ -115,6 +120,7 @@ class Module:
             {
                 "pt": event["L1gmtTkMuon_pt"],
                 "phi": event["L1gmtTkMuon_phi"],
+                "hwphi": event["L1gmtTkMuon_hwPhi"],
                 "eta": event["L1gmtTkMuon_eta"],
                 "Q": event["L1gmtTkMuon_charge"],
                 "qual": event["L1gmtTkMuon_hwQual"],
@@ -238,10 +244,13 @@ class Module:
     def __ConstructP4__(self):
         if not hasattr(self, "pt"):
             print("Need to set object physics pt")
+            return False
         if not hasattr(self, "eta"):
             print("Need to set object physics eta")
+            return False
         if not hasattr(self, "phi"):
             print("Need to set object physics phi")
+            return False
 
         t = ak.zip(
             {
@@ -252,6 +261,7 @@ class Module:
             }
         )
         self.p4 = vector.Array(t)
+        return True
 
     def __MatchGenMax__(self, match_dR=0.3):
         ref_test = ak.argcartesian({"gen": self.genmu, "L1": self.p4})
@@ -320,6 +330,13 @@ class Module:
 
         self.h["%s__den_" % name].fill(ak.flatten(getattr(obj[dencut], att)))
         self.h["%s__num_" % name].fill(ak.flatten(getattr(obj[numcut], att)))
+
+    def __FillEffPerEvent__(self, name, obj, ispass, nbins, xfirst, xlast, label=None):
+        self.__bookEffReg__(name, nbins, xfirst, xlast, label)
+
+        self.h["%s__den_" % name].fill(obj)
+        if ispass:
+            self.h["%s__num_" % name].fill(obj)
 
     def __FillEffCal__(self, name, att, gencut=None, objcut=None):
         if gencut is None:
@@ -414,35 +431,35 @@ class Module:
                     objcut=self.pt > cut,
                 )
 
-    def __SethbStation(self, event):
+    def __SethbStation__(self, event):
         ## Setting the hybrid stub stations
-        isME11 = ((event.hit_emtf_chamber >= 0) & (event.hit_emtf_chamber <= 2)) | (
-            (event.hit_emtf_chamber >= 9) & (event.hit_emtf_chamber <= 11)
+        isME11 = ((event.emtfhit_chamber >= 0) & (event.emtfhit_chamber <= 2)) | (
+            (event.emtfhit_chamber >= 9) & (event.emtfhit_chamber <= 11)
         )
-        isME0 = (event.hit_emtf_chamber >= 108) & (event.hit_emtf_chamber <= 114)
-        isGE11 = ((event.hit_emtf_chamber >= 54) & (event.hit_emtf_chamber <= 56)) | (
-            (event.hit_emtf_chamber >= 63) & (event.hit_emtf_chamber <= 11)
+        isME0 = (event.emtfhit_chamber >= 108) & (event.emtfhit_chamber <= 114)
+        isGE11 = ((event.emtfhit_chamber >= 54) & (event.emtfhit_chamber <= 56)) | (
+            (event.emtfhit_chamber >= 63) & (event.emtfhit_chamber <= 11)
         )
         ## From the hybrid stub plot, only ME0/GE11 is station 1
         istation1 = isME0 | isGE11
-        self.hb_station = event.hit_station + 1
+        self.hb_station = event.emtfhit_station + 1
         self.hb_station = ak.where(istation1, 1, self.hb_station)
         ## Set the Hybrid Stub Layers according to the plot
         self.hb_layer = self.hb_station
 
         ## Get the TFLayer, used in the GMT emulator
-        self.hb_tflayer = listLUT(TFLayer.values(), event.hit_emtf_site)
+        self.hb_tflayer = listLUT(TFLayer.values(), event.emtfhit_site)
 
         ## For ME11, eta < 2.0 will be station 1
         ME11_Stat1 = isME11 & (
-            (abs(event.hit_glob_theta) < 15.4)
-            | (abs(event.hit_glob_theta) > 180 - 15.4)
+            (abs(event.emtfhit_globTheta) < 15.4)
+            | (abs(event.emtfhit_globTheta) > 180 - 15.4)
         )
         self.hb_layer = ak.where(ME11_Stat1, 1, self.hb_layer)
         ## For GE11, eta > 2.0 will be station 2
         GE11_Stat2 = isGE11 & (
-            (abs(event.hit_glob_theta) > 15.4)
-            & (abs(event.hit_glob_theta) < 180 - 15.4)
+            (abs(event.emtfhit_globTheta) > 15.4)
+            & (abs(event.emtfhit_globTheta) < 180 - 15.4)
         )
         self.hb_layer = ak.where(GE11_Stat2, 2, self.hb_layer)
         # self.hit_tflayer = self.hb_layer
@@ -463,7 +480,6 @@ class Module:
             outfile["%s/%s" % (self.folder, k)] = self.h[k]
 
     def ConvertEff(self, name, label):
-        print(name, label)
         effname = name + "_eff"
         num = name + "__num_"
         den = name + "__den_"

@@ -21,10 +21,14 @@ import numpy as np
 import uproot
 from hist import Hist
 
-# from EMTFHits import EMTFHits
+from EMTFHits import EMTFHits
 from EMTFTrack import EMTFTracks
+from EMTFStubs import EMTFStubs
+
+# from Hybrid import Hybrid
 from OMTFTrack import OMTFTracks
 from SAMuons import SAMuons
+from GMTStubs import GMTStubs
 
 # from L1Tracks import L1Tracks
 from Tau23Mus import TauModules
@@ -58,7 +62,24 @@ samplemap = {
     "DispMu2_12DT": "Data_IBv9_12DT/DispMu2_Fall22_IBv9_12DT.root",
     "DispMu30_12DT": "Data_IBv9_12DT/DispMu30_Fall22_IBv9_12DT.root",
     "H24Mu_12DT": "Data_IBv9_12DT/HTo2LongLivedTo4mu_Fall22_IBv9_12DT.root",
+    "GMT": "EMTFHyribStub/GMT_HybridStub.root",
+    "EMTF_Min2": "EMTFHyribStub/EMTF_HybridStub_min2.root",
+    "EMTF_Max2": "EMTFHyribStub/EMTF_HybridStub_max2.root",
+    "EMTF_Max2_noGEM": "EMTFHyribStub/EMTF_HybridStub_max2_noGEM.root",
+    "EMTF_Max10_noGEM": "EMTFHyribStub/EMTF_HybridStub_Max10_noGEM.root",
+    "EMTF_Max10_noGEM_noOver": "EMTFHyribStub/EMTF_HybridStub_Max10_noGEM_noOver.root",
 }
+
+# Analysis modules
+modules = [
+    EMTFStubs("emtfstubs"),
+    EMTFHits("emtfhits"),
+    EMTFTracks("emtftracks"),
+    OMTFTracks("omtftracks"),
+    SAMuons("samuons"),
+    TrackerMuons("trackermuons"),
+    TauModules("tau23mus"),
+]
 
 
 def eosls(sample):
@@ -67,8 +88,8 @@ def eosls(sample):
     if sample not in samplemap.keys():
         return None
     ## Get the file folder
-    if "local" in hostname:
-        inputLocation = "/Users/benwu/Work/L1MuNanoAna/V9Data/"
+    if "local" in hostname or "MBP" in hostname:
+        inputLocation = "/Users/benwu/Work/L1MuNanoAna/"
     else:
         inputLocation = eosfolder + samplemap[sample]
 
@@ -105,17 +126,23 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if args.sample == "test":
+    outputname  = args.sample
+    if "root" in args.sample:
+        filelist = [args.sample]
+        outputname = args.sample.split("/")[-1].split(".")[0]
+        print(filelist)
+        print(outputname)
+    elif args.sample == "test":
         # filelist = ["./H24mu_v8.root"]
         # filelist = ["./V9Data/H24Mu1k.root"]
         # filelist = ["./DYLL_v8.root"]
         # filelist = ["./DYLL_GMTV7.root"]
         # filelist = ["./DYLL_GMTV5.root"]
-        # filelist = ["./test.root"]
-        # filelist = ["./V9Data/HTo2LongLivedTo4mu_MFF_Fall22_ALL.root"]
-        filelist = ["./TauData/tau_v0.root"]
-        # filelist = ["./Data_IBv9_12DT/HTo2LongLivedTo4mu_Fall22_IBv9_12DT_temp.root"]
-        # filelist = ["./V10Data/DYToLL_IBv9_13DT.root"]
+        # filelist = ["./output_Phase2_L1T.root"]  # EMTF hits
+        # filelist = ["./TauData/tau_v0.root"]
+        # filelist = ["./EMTFHyribStub/Nov3.root"]
+        # filelist = ["EMTFHyribStub/GMT_HybridStub.root"]
+        filelist = ["EMTFHyribStub/EMTF_HybridStub.root"]
     else:
         filelist = eosls(args.sample)
     filename = [i + ":Events" for i in filelist]
@@ -130,10 +157,12 @@ if __name__ == "__main__":
     )
 
     ### Store the output file
-    outfile = uproot.recreate("%s/%s_hists.root" % (outputlocation, args.sample))
+    outfile = uproot.recreate("%s/%s_hists.root" % (outputlocation, outputname))
 
     mod_tkmuons = TrackerMuons(prefix="L1gmtTkMuon_")
+    mod_hit = EMTFHits()
     mod_tau = TauModules()
+    mod_stub = GMTStubs()
     # mod_samuons = SAMuons("SA", "L1GTgmtMuon_", isDisplaced=False, matchdR=0.3)
     # mod_samuons = SAMuons("SA", "L1GTgmtMuon_", isDisplaced=True, matchdR=0.3)
     # mod_samuons = SAMuons("SA", "L1MuonKMTF_", isDisplaced=True, matchdR=0.3)
@@ -151,6 +180,7 @@ if __name__ == "__main__":
     # mod_omtf = OMTFTracks()
     modules = [
         # mod_hit,
+        # mod_stub,
         # mod_emtf,
         # mod_hbstub,
         # mod_samuons,
@@ -161,12 +191,13 @@ if __name__ == "__main__":
         # mod_fwdisp6,
         # mod_emtf,
         # mod_omtf,
-        # mod_tkmuons,
-        mod_tau,
+        mod_tkmuons,
+        # mod_tau,
         # mod_l1trks,
     ]
 
     # ### Running over samples
+    [m.isMinBias(args.sample == "MinBias") for m in modules]
     nTotal = 0
     for e in events:
         nEvent = len(e)
