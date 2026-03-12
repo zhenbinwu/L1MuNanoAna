@@ -60,7 +60,8 @@ class TrackerMuons(Module):
         super().__CalDefaultEff__()
 
     def __fillRate(self):
-        self.h["tkmu_rate"].fill(ak.flatten(self.pt))
+        toppt = ak.drop_none(ak.max(self.pt, axis=1))
+        self.h["tkmu_rate"].fill(toppt)
         self.h["tkmu_qual"].fill(ak.flatten(self.hwQual))
         self.h["tkmu_isosum"].fill(ak.flatten(self.hwIso))
         self.h["tkmu_pt"].fill(ak.flatten(self.pt))

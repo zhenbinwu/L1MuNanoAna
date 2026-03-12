@@ -80,7 +80,7 @@ class GMTStubs(Module):
         # self.h["pt"].fill(ak.ulatten(self.pt))
         # print("address ", self.addr)
         self.h["nStubs"].fill(ak.count(self.phi1, axis=1))
-        self.h["nBX"].fill(ak.flatten(self.BX))
+        self.h["nBX"].fill(ak.flatten(self.bx))
         self.h["addr"].fill(ak.flatten(self.addr))
         self.h["phi1"].fill(ak.flatten(self.phi1))
         self.h["phi2"].fill(ak.flatten(self.phi2))
